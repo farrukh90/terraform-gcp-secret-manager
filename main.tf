@@ -1,19 +1,12 @@
 resource "random_password" "this" {
-  for_each = {
-    for name, config in var.secrets :
-    name => config
-    if config.generate
-  }
-
-  length  = each.value.length
-  special = each.value.special
+  length  = 24
+  special = false
 }
 
-resource "google_secret_manager_secret" "this" {
-  for_each = var.secrets
 
+resource "google_secret_manager_secret" "this" {
   project   = var.project_id
-  secret_id = each.key
+  secret_id = var.name
 
   replication {
     auto {}
@@ -23,13 +16,10 @@ resource "google_secret_manager_secret" "this" {
 }
 
 resource "google_secret_manager_secret_version" "this" {
-  for_each = var.secrets
+  secret = google_secret_manager_secret.this.id
 
-  secret = google_secret_manager_secret.this[each.key].id
-
-  secret_data = (
-    each.value.generate
-    ? random_password.this[each.key].result
-    : each.value.value
-  )
+  secret_data = jsonencode({
+    username = "admin"
+    password = random_password.this.result
+  })
 }

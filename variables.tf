@@ -19,3 +19,9 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "name" {
+  description = "name to apply to the secrets"
+  type        = map(string)
+  default     = {}
+}

@@ -1,9 +1,10 @@
 # Usage
-```
-module "secrets" {
-  source = "git::https://github.com/farrukh90/terraform-gcp-secret-manager.git?ref=v1.0.0"
 
+```hcl
+module "secret" {
+  source = "farrukh90/secret-manager/gcp"
   project_id = var.project_id
+  name       = "grafana"
 
   secrets = {
     username = {
@@ -13,7 +14,13 @@ module "secrets" {
     password = {
       generate = true
       length   = 24
+      special  = false
     }
+  }
+
+  labels = {
+    application = "grafana"
+    managedby   = "terraform"
   }
 }
 ```
