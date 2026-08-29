@@ -14,20 +14,8 @@ variable "secrets" {
   }))
 }
 
-variable "password_length" {
-  description = "Length of the generated password"
-  type        = number
-  default     = 24
-}
-
-variable "special" {
-  description = "Whether to include special characters in the password"
-  type        = bool
-  default     = false
-}
-
 variable "labels" {
-  description = "Labels to apply to the secret"
+  description = "Labels to apply to the secrets"
   type        = map(string)
   default     = {}
 }
