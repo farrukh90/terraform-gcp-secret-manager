@@ -29,13 +29,13 @@ variable "secrets" {
 }
 
 variable "labels" {
-  description = "Labels applied to the secret"
+  description = "Labels applied to managed resources"
   type        = map(string)
   default     = {}
 }
 
 variable "create_kubernetes_secret" {
-  description = "Create a Kubernetes Secret using the generated secret values"
+  description = "Whether to create a Kubernetes Secret"
   type        = bool
   default     = false
 }
@@ -47,13 +47,13 @@ variable "kubernetes_namespace" {
 }
 
 variable "kubernetes_secret_name" {
-  description = "Name of the Kubernetes Secret. Defaults to the Google Secret Manager secret name"
+  description = "Name of the Kubernetes Secret"
   type        = string
   default     = null
 }
 
 variable "kubernetes_secret_keys" {
-  description = "Optional mapping from secret field names to Kubernetes Secret key names"
+  description = "Mapping between secret fields and Kubernetes Secret keys"
   type        = map(string)
   default     = {}
 }

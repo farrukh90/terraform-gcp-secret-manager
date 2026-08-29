@@ -8,19 +8,18 @@ It can also optionally create a Kubernetes Secret containing the same values.
 
 The following example creates:
 
-* One Google Secret Manager secret named `grafana`
+* One Google Secret Manager secret named `application`
+* A static username
 * A generated 24-character password
-* One Kubernetes Secret named `grafana-admin-credentials`
-* Kubernetes keys mapped to `admin-user` and `admin-password`
+* One Kubernetes Secret named `application-credentials`
+* Kubernetes keys mapped to `username` and `password`
 
 ```hcl
-module "grafana-secrets" {
+module "application-secrets" {
   source = "farrukh90/secret-manager/gcp"
 
-  count = var.grafana ? 1 : 0
-
   project_id = var.project_id
-  name       = "grafana"
+  name       = "application"
 
   secrets = {
     username = {
@@ -35,17 +34,17 @@ module "grafana-secrets" {
   }
 
   labels = {
-    application = "grafana"
+    application = "application"
     managedby   = "terraform"
   }
 
   create_kubernetes_secret = true
-  kubernetes_namespace     = module.grafana-ns[0].name
-  kubernetes_secret_name   = "grafana-admin-credentials"
+  kubernetes_namespace     = "application"
+  kubernetes_secret_name   = "application-credentials"
 
   kubernetes_secret_keys = {
-    username = "admin-user"
-    password = "admin-password"
+    username = "username"
+    password = "password"
   }
 }
 ```
@@ -55,7 +54,7 @@ module "grafana-secrets" {
 The module creates one Google Secret Manager secret:
 
 ```text
-grafana
+application
 ```
 
 The latest secret version contains a JSON object similar to:
@@ -67,96 +66,148 @@ The latest secret version contains a JSON object similar to:
 }
 ```
 
-The username and password are stored together in a single Google Secret Manager secret.
+All values defined under `secrets` are stored together in a single Google Secret Manager secret.
+
+The module is not limited to usernames and passwords. Any string-based values can be stored.
+
+For example:
+
+```hcl
+secrets = {
+  api_key = {
+    generate = true
+    length   = 40
+  }
+
+  environment = {
+    value = "production"
+  }
+
+  database_user = {
+    value = "appuser"
+  }
+
+  database_password = {
+    generate = true
+    length   = 32
+  }
+}
+```
+
+This produces JSON similar to:
+
+```json
+{
+  "api_key": "<generated-value>",
+  "environment": "production",
+  "database_user": "appuser",
+  "database_password": "<generated-value>"
+}
+```
 
 ## Kubernetes Secret
 
-When:
+Kubernetes Secret creation is optional.
+
+Enable it with:
 
 ```hcl
 create_kubernetes_secret = true
 ```
 
-the module also creates:
+When enabled, provide the Kubernetes namespace:
+
+```hcl
+kubernetes_namespace = "application"
+```
+
+You can also specify the Kubernetes Secret name:
+
+```hcl
+kubernetes_secret_name = "application-credentials"
+```
+
+If `kubernetes_secret_name` is not provided, the module uses the value of `name`.
+
+For example:
+
+```hcl
+name = "application"
+
+create_kubernetes_secret = true
+kubernetes_namespace     = "application"
+```
+
+will create a Kubernetes Secret named:
 
 ```text
-grafana-admin-credentials
+application
 ```
 
-in the namespace specified by:
+inside the `application` namespace.
+
+## Kubernetes Secret Key Mapping
+
+By default, the Kubernetes Secret uses the same key names defined in `secrets`.
+
+For example:
 
 ```hcl
-kubernetes_namespace = module.grafana-ns[0].name
-```
+secrets = {
+  username = {
+    value = "admin"
+  }
 
-The `kubernetes_secret_keys` map controls how fields from the Google secret are named inside Kubernetes:
-
-```hcl
-kubernetes_secret_keys = {
-  username = "admin-user"
-  password = "admin-password"
+  password = {
+    generate = true
+  }
 }
 ```
 
-This produces a Kubernetes Secret containing:
+will create Kubernetes keys:
 
 ```text
-grafana-admin-credentials
-├── admin-user
-└── admin-password
+username
+password
 ```
 
-The values are populated automatically from the same data used to create the Google Secret Manager secret.
+You can override these names with `kubernetes_secret_keys`.
 
-## Configure Grafana
-
-The Grafana Helm chart can use the Kubernetes Secret directly:
-
-```yaml
-admin:
-  existingSecret: grafana-admin-credentials
-  userKey: admin-user
-  passwordKey: admin-password
+```hcl
+kubernetes_secret_keys = {
+  username = "application-user"
+  password = "application-password"
+}
 ```
 
-No Google Secret Manager data source or `jsondecode()` is required in the calling Terraform configuration when `create_kubernetes_secret` is enabled.
+The Google Secret Manager secret will still contain:
 
-The complete flow is:
+```json
+{
+  "username": "admin",
+  "password": "<generated-password>"
+}
+```
+
+while the Kubernetes Secret will contain:
 
 ```text
-                     random_password
-                           |
-                           v
-                 +-------------------+
-                 |   Module Values   |
-                 +-------------------+
-                    |             |
-                    |             |
-                    v             v
-        Google Secret Manager   Kubernetes Secret
-        +------------------+    +---------------------------+
-        | grafana          |    | grafana-admin-credentials |
-        |                  |    |                           |
-        | username         |    | admin-user                |
-        | password         |    | admin-password            |
-        +------------------+    +---------------------------+
-                                          |
-                                          v
-                                       Grafana
+application-user
+application-password
 ```
+
+This allows the module to work with applications that require specific Kubernetes Secret key names.
 
 ## Google Secret Manager Only
-
-Kubernetes Secret creation is optional.
 
 To create only the Google Secret Manager secret:
 
 ```hcl
-module "grafana-secrets" {
+module "application-secrets" {
   source = "farrukh90/secret-manager/gcp"
 
   project_id = var.project_id
-  name       = "grafana"
+  name       = "application"
 
   secrets = {
     username = {
@@ -170,23 +221,23 @@ module "grafana-secrets" {
     }
   }
 
-  create_kubernetes_secret = false
-
   labels = {
-    application = "grafana"
+    application = "application"
     managedby   = "terraform"
   }
+
+  create_kubernetes_secret = false
 }
 ```
 
-`create_kubernetes_secret` defaults to `false`, so it can also be omitted:
+Because `create_kubernetes_secret` defaults to `false`, it can also be omitted:
 
 ```hcl
-module "grafana-secrets" {
+module "application-secrets" {
   source = "farrukh90/secret-manager/gcp"
 
   project_id = var.project_id
-  name       = "grafana"
+  name       = "application"
 
   secrets = {
     username = {
@@ -204,71 +255,143 @@ This creates only:
 
 ```text
 Google Secret Manager
-└── grafana
+└── application
     ├── username
     └── password
 ```
 
 ## Read and Decode the Google Secret
 
-If the Kubernetes Secret is not created by the module and the secret needs to be consumed elsewhere in Terraform, it can be read from Google Secret Manager.
+If the Kubernetes Secret is not created by the module and the secret needs to be consumed elsewhere in Terraform, it can be read using the Google Secret Manager data source.
 
 ```hcl
-data "google_secret_manager_secret_version" "grafana" {
-  secret = module.grafana-secrets.secret_id
+data "google_secret_manager_secret_version" "application" {
+  secret = module.application-secrets.secret_id
 
   depends_on = [
-    module.grafana-secrets
+    module.application-secrets
   ]
 }
 ```
 
-Because the secret is stored as JSON, decode it with `jsondecode()`:
+Because the secret is stored as JSON, use `jsondecode()` to access individual values:
 
 ```hcl
 locals {
-  grafana_credentials = jsondecode(
-    data.google_secret_manager_secret_version.grafana.secret_data
+  application_credentials = jsondecode(
+    data.google_secret_manager_secret_version.application.secret_data
   )
 }
 ```
 
-Individual values can then be accessed with:
+Individual values can then be referenced with:
 
 ```hcl
-local.grafana_credentials.username
-local.grafana_credentials.password
+local.application_credentials.username
+local.application_credentials.password
 ```
 
 If the module uses `count`, reference the module instance accordingly:
 
 ```hcl
-data "google_secret_manager_secret_version" "grafana" {
-  count = var.grafana ? 1 : 0
+module "application-secrets" {
+  source = "farrukh90/secret-manager/gcp"
 
-  secret = module.grafana-secrets[0].secret_id
+  count = var.application_enabled ? 1 : 0
+
+  project_id = var.project_id
+  name       = "application"
+
+  secrets = {
+    username = {
+      value = "admin"
+    }
+
+    password = {
+      generate = true
+    }
+  }
+}
+```
+
+Then read the secret with:
+
+```hcl
+data "google_secret_manager_secret_version" "application" {
+  count = var.application_enabled ? 1 : 0
+
+  secret = module.application-secrets[0].secret_id
 
   depends_on = [
-    module.grafana-secrets
+    module.application-secrets
   ]
 }
 ```
 
-Then:
+And decode it:
 
 ```hcl
 locals {
-  grafana_credentials = var.grafana ? jsondecode(
-    data.google_secret_manager_secret_version.grafana[0].secret_data
+  application_credentials = var.application_enabled ? jsondecode(
+    data.google_secret_manager_secret_version.application[0].secret_data
   ) : {}
 }
 ```
 
-## Custom Kubernetes Key Mapping
+## Generated Values
 
-The names stored in Google Secret Manager do not need to match the names expected by an application.
+Any secret field can be generated automatically.
 
-For example:
+```hcl
+secrets = {
+  password = {
+    generate = true
+  }
+}
+```
+
+By default, generated values use:
+
+```text
+length  = 24
+special = false
+```
+
+These values can be customized:
+
+```hcl
+secrets = {
+  password = {
+    generate = true
+    length   = 32
+    special  = true
+  }
+
+  api_key = {
+    generate = true
+    length   = 48
+    special  = false
+  }
+}
+```
+
+## Static Values
+
+Static values can be provided using `value`:
+
+```hcl
+secrets = {
+  username = {
+    value = "admin"
+  }
+
+  environment = {
+    value = "production"
+  }
+}
+```
+
+Generated and static values can be mixed within the same secret.
 
 ```hcl
 secrets = {
@@ -279,42 +402,21 @@ secrets = {
   password = {
     generate = true
   }
-}
 
-kubernetes_secret_keys = {
-  username = "admin-user"
-  password = "admin-password"
-}
-```
-
-Google Secret Manager contains:
-
-```json
-{
-  "username": "admin",
-  "password": "<generated-password>"
+  environment = {
+    value = "production"
+  }
 }
 ```
 
-while Kubernetes contains:
-
-```text
-admin-user
-admin-password
-```
-
-This allows the module to work with applications that require specific Kubernetes Secret key names.
-
-## Additional Example
-
-The same module can be reused for other applications.
+## Complete Example
 
 ```hcl
-module "vault-secrets" {
+module "application-secrets" {
   source = "farrukh90/secret-manager/gcp"
 
   project_id = var.project_id
-  name       = "vault"
+  name       = "application"
 
   secrets = {
     username = {
@@ -323,23 +425,36 @@ module "vault-secrets" {
 
     password = {
       generate = true
-      length   = 32
-      special  = true
+      length   = 24
+      special  = false
+    }
+
+    api_key = {
+      generate = true
+      length   = 40
+      special  = false
+    }
+
+    environment = {
+      value = "production"
     }
   }
 
   labels = {
-    application = "vault"
+    application = "application"
+    environment = "production"
     managedby   = "terraform"
   }
 
   create_kubernetes_secret = true
-  kubernetes_namespace     = "vault"
-  kubernetes_secret_name   = "vault-credentials"
+  kubernetes_namespace     = "application"
+  kubernetes_secret_name   = "application-secrets"
 
   kubernetes_secret_keys = {
-    username = "username"
-    password = "password"
+    username    = "username"
+    password    = "password"
+    api_key     = "api-key"
+    environment = "environment"
   }
 }
 ```
@@ -348,14 +463,40 @@ This creates:
 
 ```text
 Google Secret Manager
-└── vault
+└── application
     ├── username
-    └── password
+    ├── password
+    ├── api_key
+    └── environment
 
 Kubernetes
-└── vault/vault-credentials
+└── application/application-secrets
     ├── username
-    └── password
+    ├── password
+    ├── api-key
+    └── environment
+```
+
+## Credential Flow
+
+```text
+Static Values
+     |
+     |
+     +------------------+
+                        |
+Generated Values        |
+     |                  |
+     v                  v
+random_password    Module Secret Data
+                        |
+              +---------+---------+
+              |                   |
+              v                   v
+    Google Secret Manager    Kubernetes Secret
+              |                   |
+              v                   v
+        JSON Secret         Application / Service
 ```
 
 ## Inputs
@@ -364,7 +505,7 @@ Kubernetes
 | -------------------------- | -------------------------------------------------------- | ------------- | -------- |
 | `project_id`               | GCP project ID                                           | `string`      | Required |
 | `name`                     | Google Secret Manager secret name                        | `string`      | Required |
-| `secrets`                  | Values to store in the secret                            | `map(object)` | Required |
+| `secrets`                  | Values to store inside the secret                        | `map(object)` | Required |
 | `labels`                   | Labels applied to managed resources                      | `map(string)` | `{}`     |
 | `create_kubernetes_secret` | Whether to create a Kubernetes Secret                    | `bool`        | `false`  |
 | `kubernetes_namespace`     | Namespace for the Kubernetes Secret                      | `string`      | `null`   |
@@ -377,10 +518,10 @@ Each entry in `secrets` supports:
 | ---------- | -------------------------- | ------- |
 | `value`    | Static value to store      | `null`  |
 | `generate` | Generate a random value    | `false` |
-| `length`   | Generated password length  | `24`    |
+| `length`   | Generated value length     | `24`    |
 | `special`  | Include special characters | `false` |
 
-For example:
+Example:
 
 ```hcl
 secrets = {
@@ -396,9 +537,15 @@ secrets = {
 }
 ```
 
+Each secret entry must either define a static `value` or set:
+
+```hcl
+generate = true
+```
+
 ## Outputs
 
-The module exposes information about the created resources without intentionally outputting the secret values.
+The module exposes information about created resources without intentionally outputting secret values.
 
 ```hcl
 output "secret_id" {
@@ -425,10 +572,22 @@ output "kubernetes_secret_name" {
 }
 ```
 
+The secret values themselves are intentionally not exposed as module outputs.
+
 ## Important
 
-Generated passwords and supplied secret values are stored in Terraform state because Terraform manages the secret values.
+Generated and supplied secret values are stored in Terraform state because Terraform manages the secret data.
 
-This applies to both Google Secret Manager secret data and Kubernetes Secret data managed by Terraform.
+This applies to both:
 
-Protect the Terraform state backend appropriately, enable suitable access controls, and never commit local Terraform state files to Git.
+```text
+google_secret_manager_secret_version.secret_data
+```
+
+and Kubernetes Secret values managed through:
+
+```text
+kubernetes_secret_v1
+```
+
+Protect the Terraform state backend appropriately, restrict access to the state, and never commit local Terraform state files to Git.

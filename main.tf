@@ -37,8 +37,7 @@ resource "google_secret_manager_secret" "this" {
 }
 
 resource "google_secret_manager_secret_version" "this" {
-  secret = google_secret_manager_secret.this.id
-
+  secret      = google_secret_manager_secret.this.id
   secret_data = jsonencode(local.secret_data)
 }
 
@@ -52,8 +51,7 @@ resource "kubernetes_secret_v1" "this" {
     )
 
     namespace = var.kubernetes_namespace
-
-    labels = var.labels
+    labels    = var.labels
   }
 
   data = local.kubernetes_secret_data

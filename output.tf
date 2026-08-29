@@ -15,6 +15,7 @@ output "secret_version" {
 
 output "kubernetes_secret_name" {
   description = "Name of the Kubernetes Secret"
+
   value = var.create_kubernetes_secret ? (
     kubernetes_secret_v1.this[0].metadata[0].name
   ) : null
