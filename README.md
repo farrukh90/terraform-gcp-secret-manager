@@ -1,8 +1,10 @@
 # Usage
 
 ```hcl
-module "secret" {
+module "grafana-secrets" {
   source = "farrukh90/secret-manager/gcp"
+  count  = var.grafana ? 1 : 0
+
   project_id = var.project_id
   name       = "grafana"
 

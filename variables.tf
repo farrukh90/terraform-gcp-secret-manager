@@ -3,8 +3,13 @@ variable "project_id" {
   type        = string
 }
 
+variable "name" {
+  description = "Name of the Google Secret Manager secret"
+  type        = string
+}
+
 variable "secrets" {
-  description = "Secrets to create in Google Secret Manager"
+  description = "Values stored inside the secret"
 
   type = map(object({
     value    = optional(string)
@@ -15,13 +20,7 @@ variable "secrets" {
 }
 
 variable "labels" {
-  description = "Labels to apply to the secrets"
-  type        = map(string)
-  default     = {}
-}
-
-variable "name" {
-  description = "name to apply to the secrets"
+  description = "Labels applied to the secret"
   type        = map(string)
   default     = {}
 }
