@@ -1,16 +1,19 @@
 # Usage
 ```
-module "grafana_password" {
-  source = "../../"
+module "secrets" {
+  source = "git::https://github.com/farrukh90/terraform-gcp-secret-manager.git?ref=v1.0.0"
 
-  project_id      = "terraform-project-504523"
-  secret_id       = "grafana-admin-password"
-  password_length = 24
-  special         = false
+  project_id = var.project_id
 
-  labels = {
-    application = "grafana"
-    managedby   = "terraform"
+  secrets = {
+    username = {
+      value = "admin"
+    }
+
+    password = {
+      generate = true
+      length   = 24
+    }
   }
 }
 ```

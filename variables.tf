@@ -3,9 +3,15 @@ variable "project_id" {
   type        = string
 }
 
-variable "secret_id" {
-  description = "Google Secret Manager secret name"
-  type        = string
+variable "secrets" {
+  description = "Secrets to create in Google Secret Manager"
+
+  type = map(object({
+    value    = optional(string)
+    generate = optional(bool, false)
+    length   = optional(number, 24)
+    special  = optional(bool, false)
+  }))
 }
 
 variable "password_length" {
