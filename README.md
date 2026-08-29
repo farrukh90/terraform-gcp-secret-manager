@@ -591,3 +591,273 @@ kubernetes_secret_v1
 ```
 
 Protect the Terraform state backend appropriately, restrict access to the state, and never commit local Terraform state files to Git.
+
+
+## Usage with Helm
+
+When `create_kubernetes_secret = true`, the module creates a Kubernetes Secret that can be consumed by a Helm chart.
+
+For example:
+
+```hcl
+module "application-secrets" {
+  source = "farrukh90/secret-manager/gcp"
+
+  project_id = var.project_id
+  name       = "application"
+
+  secrets = {
+    username = {
+      value = "admin"
+    }
+
+    password = {
+      generate = true
+      length   = 24
+      special  = false
+    }
+  }
+
+  create_kubernetes_secret = true
+  kubernetes_namespace     = "application"
+  kubernetes_secret_name   = "application-credentials"
+
+  kubernetes_secret_keys = {
+    username = "username"
+    password = "password"
+  }
+
+  labels = {
+    application = "application"
+    managedby   = "terraform"
+  }
+}
+```
+
+This creates the Kubernetes Secret:
+
+```text
+application-credentials
+├── username
+└── password
+```
+
+A Helm chart can then reference that Secret.
+
+### Example Helm Deployment
+
+```hcl
+module "application-helm" {
+  source = "farrukh90/appdeploy/helm"
+
+  name       = "application"
+  namespace  = "application"
+  chart      = "application"
+  repository = "https://example.com/helm-charts"
+
+  values = [<<EOF
+
+existingSecret: application-credentials
+
+secretKeys:
+  username: username
+  password: password
+
+EOF
+  ]
+
+  depends_on = [
+    module.application-secrets
+  ]
+}
+```
+
+The exact Helm values depend on the chart being deployed. Different charts may use names such as:
+
+```yaml
+existingSecret: application-credentials
+```
+
+or:
+
+```yaml
+auth:
+  existingSecret: application-credentials
+```
+
+or:
+
+```yaml
+credentials:
+  existingSecret: application-credentials
+  usernameKey: username
+  passwordKey: password
+```
+
+Always check the Helm chart's `values.yaml` to determine the expected secret configuration.
+
+## Helm Chart with Custom Secret Keys
+
+Some Helm charts require specific Kubernetes Secret key names.
+
+For example, an application may expect:
+
+```text
+admin-user
+admin-password
+```
+
+The module can map the generic Google Secret Manager keys to those Kubernetes keys:
+
+```hcl
+module "application-secrets" {
+  source = "farrukh90/secret-manager/gcp"
+
+  project_id = var.project_id
+  name       = "application"
+
+  secrets = {
+    username = {
+      value = "admin"
+    }
+
+    password = {
+      generate = true
+      length   = 24
+      special  = false
+    }
+  }
+
+  create_kubernetes_secret = true
+  kubernetes_namespace     = "application"
+  kubernetes_secret_name   = "application-credentials"
+
+  kubernetes_secret_keys = {
+    username = "admin-user"
+    password = "admin-password"
+  }
+}
+```
+
+The Google Secret Manager secret contains:
+
+```json
+{
+  "username": "admin",
+  "password": "<generated-password>"
+}
+```
+
+while the Kubernetes Secret contains:
+
+```text
+application-credentials
+├── admin-user
+└── admin-password
+```
+
+The Helm chart can then reference those exact keys:
+
+```yaml
+admin:
+  existingSecret: application-credentials
+  userKey: admin-user
+  passwordKey: admin-password
+```
+
+## Helm with Namespace Module
+
+If the namespace is also managed by Terraform:
+
+```hcl
+module "application-ns" {
+  source = "farrukh90/ns/kubernetes"
+
+  name = "application"
+
+  labels = {
+    managedby = "terraform"
+  }
+}
+```
+
+The namespace output can be passed directly to the secret module:
+
+```hcl
+module "application-secrets" {
+  source = "farrukh90/secret-manager/gcp"
+
+  project_id = var.project_id
+  name       = "application"
+
+  secrets = {
+    username = {
+      value = "admin"
+    }
+
+    password = {
+      generate = true
+    }
+  }
+
+  create_kubernetes_secret = true
+  kubernetes_namespace     = module.application-ns.name
+  kubernetes_secret_name   = "application-credentials"
+
+  kubernetes_secret_keys = {
+    username = "username"
+    password = "password"
+  }
+
+  depends_on = [
+    module.application-ns
+  ]
+}
+```
+
+The Helm deployment can use the same namespace:
+
+```hcl
+module "application-helm" {
+  source = "farrukh90/appdeploy/helm"
+
+  name      = "application"
+  namespace = module.application-ns.name
+
+  chart      = "application"
+  repository = "https://example.com/helm-charts"
+
+  values = [<<EOF
+
+existingSecret: application-credentials
+
+EOF
+  ]
+
+  depends_on = [
+    module.application-secrets
+  ]
+}
+```
+
+The resulting dependency flow is:
+
+```text
+Kubernetes Namespace
+        |
+        v
+Secret Module
+        |
+        +-----------------------+
+        |                       |
+        v                       v
+Google Secret Manager     Kubernetes Secret
+                                  |
+                                  v
+                            Helm Deployment
+                                  |
+                                  v
+                             Application
+```
+
+Using `depends_on = [module.application-secrets]` ensures the Kubernetes Secret exists before the Helm release is deployed.
